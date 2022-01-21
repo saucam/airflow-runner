@@ -1,0 +1,9 @@
+jobs:
+  - step:
+    - job1
+    - job2
+  - step:
+    - job3
+  - step:
+    - job4
+    - job5
