@@ -1,9 +1,8 @@
 jobs:
   - step:
-    - job1
-    - job2
+    - example_bash_operator
+    - example_skip_dag
   - step:
-    - job3
+    - example_python_operator
   - step:
-    - job4
-    - job5
+    - example_bash_operator

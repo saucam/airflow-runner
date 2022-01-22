@@ -97,6 +97,7 @@ func getJobText(jobName string, vars params) *string {
 	err := temp.Execute(&buf, vars)
 	if err != nil {
 		log.Fatalln(err)
+		return nil
 	}
 	r := buf.String()
 	return &r
@@ -133,7 +134,7 @@ func ExecuteParallelJobs(jobs []string, eodDate string, host string) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			triggerAirflowJob(k, host, data)
+			TriggerAirflowJob(k, host, data)
 		}()
 	}
 	wg.Wait()
@@ -144,9 +145,5 @@ func ExecuteJob(job string, eodDate string, host string) {
 		EodDate: eodDate,
 		Env:     viper.GetString("env")}
 	data := getJobText(job, vars)
-	triggerAirflowJob(job, host, data)
-}
-
-func triggerAirflowJob(job string, host string, data *string) {
-	fmt.Println("Triggering job " + job + " with data " + *data)
+	TriggerAirflowJob(job, host, data)
 }
