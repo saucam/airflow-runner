@@ -13,9 +13,10 @@ import (
 var (
 	// Used for flags.
 	cfgFile     string
+	flowFile    string
 	airflowHost string
 	dateRange   string
-  env         string
+	env         string
 
 	rootCmd = &cobra.Command{
 		Use:   "airflow-runner",
@@ -25,15 +26,17 @@ This application is a tool to run airflow workloads using configuration file
 to run multiple jobs concurrently.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			var config runner.FlowConfig
-			err := viper.Unmarshal(&config)
+			rk := viper.New()
+			rk.SetConfigFile(flowFile)
+			if err := rk.ReadInConfig(); err == nil {
+				fmt.Println("Using flow file:", rk.ConfigFileUsed())
+			}
+			err := rk.Unmarshal(&config)
 
 			if err != nil {
 				panic("Unable to unmarshal config")
 			}
-			for _, h := range config.Jobs {
-				fmt.Println(h)
-				//fmt.Printf("Name: %s, Port: %d, Key: %s\n", h.Name, h.Port, h.Key)
-			}
+
 			runner.ExecuteFlow(airflowHost, config, dateRange)
 		},
 	}
@@ -50,17 +53,19 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file to run the jobs, default to $HOME/.airflowrun.yaml")
+	rootCmd.PersistentFlags().StringVar(&flowFile, "flow", "", "flow config file to run the jobs, must be supplied")
+	rootCmd.MarkFlagRequired("flow")
 	rootCmd.PersistentFlags().StringVar(&airflowHost, "host", "localhost:8080", "host-port of airflow service")
 	rootCmd.PersistentFlags().StringVar(&dateRange, "date", currTime.Format("2006-01-02"), "date range in either comma separated format yyyy-MM-dd,yyyy-MM-dd or range yyyy-MM-dd:yyyy-MM-dd")
-  rootCmd.PersistentFlags().StringVar(&env, "env", "dev", "Environment name where jobs are supposed to run")
+	rootCmd.PersistentFlags().StringVar(&env, "env", "dev", "Environment name where jobs are supposed to run")
 
 	// rootCmd.PersistentFlags().StringP("host", "h", "", "author name for copyright attribution")
 	rootCmd.PersistentFlags().Bool("viper", true, "use Viper for configuration")
 	viper.BindPFlag("host", rootCmd.PersistentFlags().Lookup("host"))
-  viper.BindPFlag("date", rootCmd.PersistentFlags().Lookup("date"))
-  viper.BindPFlag("env", rootCmd.PersistentFlags().Lookup("env"))
+	viper.BindPFlag("date", rootCmd.PersistentFlags().Lookup("date"))
+	viper.BindPFlag("env", rootCmd.PersistentFlags().Lookup("env"))
 
-  viper.BindPFlag("useViper", rootCmd.PersistentFlags().Lookup("viper"))
+	viper.BindPFlag("useViper", rootCmd.PersistentFlags().Lookup("viper"))
 	viper.SetDefault("license", "apache")
 
 	// rootCmd.AddCommand(versionCmd)
@@ -75,7 +80,7 @@ func initConfig() {
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
 
-		// Search config in home directory with name ".cobra" (without extension).
+		// Search config in home directory with name ".airflowrun" (without extension).
 		viper.AddConfigPath(home)
 		viper.SetConfigType("yaml")
 		viper.SetConfigName(".airflowrun")

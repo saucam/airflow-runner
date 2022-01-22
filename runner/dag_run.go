@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 type DagRunState struct {
@@ -33,6 +35,10 @@ func getDagRunState(response *http.Response) *DagRunState {
 	return &dagRunState
 }
 
+/*
+ * Calls airflow dag trigger api like below:
+ * curl -X POST --user "airflow:airflow" http://localhost:8080//api/v1/dags/example_bash_operator/dagRuns -H 'content-type:application/json' -d'{}'
+ */
 func TriggerAirflowJob(job string, host string, eod string, data *string) {
 	fmt.Println("Triggering job " + job + " for eod " + eod + " with data " + *data)
 	client := &http.Client{
@@ -76,6 +82,8 @@ func waitForDagCompletion(host string, eod string, dagRunState *DagRunState) {
 
 	info := dagId + " for eod date " + eod
 	url := host + "/api/v1/dags/" + dagId + "/dagRuns/" + dagRunId
+	user := viper.GetString("user")
+	pwd := viper.GetString("pwd")
 
 	for (dagStatus != "success") && (dagStatus != "failed") {
 		fmt.Println("Waiting for dag " + info + " to finish...")
@@ -86,7 +94,9 @@ func waitForDagCompletion(host string, eod string, dagRunState *DagRunState) {
 			continue
 		}
 		req.Header.Set("content-type", "application/json")
-		req.SetBasicAuth("airflow", "airflow")
+		if user != "" && pwd != "" {
+			req.SetBasicAuth(user, pwd)
+		}
 		response, err := client.Do(req)
 		if err != nil {
 			log.Fatal(err)
