@@ -21,7 +21,7 @@ type DagRunState struct {
 	State           string
 }
 
-func getJsonResponse(response *http.Response) *DagRunState {
+func getDagRunState(response *http.Response) *DagRunState {
 	var dagRunState DagRunState
 	err := json.NewDecoder(response.Body).Decode(&dagRunState)
 	if err != nil {
@@ -33,8 +33,8 @@ func getJsonResponse(response *http.Response) *DagRunState {
 	return &dagRunState
 }
 
-func TriggerAirflowJob(job string, host string, data *string) {
-	fmt.Println("Triggering job " + job + " with data " + *data)
+func TriggerAirflowJob(job string, host string, eod string, data *string) {
+	fmt.Println("Triggering job " + job + " for eod " + eod + " with data " + *data)
 	client := &http.Client{
 		Timeout: time.Second * 10,
 	}
@@ -57,20 +57,28 @@ func TriggerAirflowJob(job string, host string, data *string) {
 		return
 	}
 
-	dagRunState := getJsonResponse(response)
-	dagRunId := dagRunState.DagRunId
+	dagRunState := getDagRunState(response)
 	// Loop while state of dag run id changes to finished/error
-	waitForDagCompletion(host, job, dagRunId)
+	waitForDagCompletion(host, eod, dagRunState)
 }
 
-func waitForDagCompletion(host string, dagId string, dagRunId string) {
+/*
+ * Will call airflow dag run API like below:
+ * curl -X GET --user "airflow:airflow" http://localhost:8080/api/v1/dags/example_bash_operator/dagRuns/manual__2022-01-22T09:43:03.799005+00:00
+ */
+func waitForDagCompletion(host string, eod string, dagRunState *DagRunState) {
 	client := &http.Client{
 		Timeout: time.Second * 10,
 	}
-	dagStatus := "queued"
+	dagId := dagRunState.DagId
+	dagRunId := dagRunState.DagRunId
+	dagStatus := dagRunState.State
+
+	info := dagId + " for eod date " + eod
 	url := host + "/api/v1/dags/" + dagId + "/dagRuns/" + dagRunId
+
 	for (dagStatus != "success") && (dagStatus != "failed") {
-		fmt.Println("Waiting for dag " + dagRunId + " to finish...")
+		fmt.Println("Waiting for dag " + info + " to finish...")
 		time.Sleep(10 * time.Second)
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
@@ -84,12 +92,12 @@ func waitForDagCompletion(host string, dagId string, dagRunId string) {
 			log.Fatal(err)
 			continue
 		}
-		dagRunState := getJsonResponse(response)
+		dagRunState := getDagRunState(response)
 		dagStatus = dagRunState.State
 	}
 	if dagStatus == "success" {
-		fmt.Println("Dag " + dagRunId + " executed successfully")
+		fmt.Println("Dag " + info + " executed successfully")
 	} else {
-		fmt.Println("Dag " + dagRunId + " failed!")
+		fmt.Println("Dag " + info + " failed!")
 	}
 }

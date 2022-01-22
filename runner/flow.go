@@ -2,8 +2,10 @@ package runner
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"text/template"
@@ -90,11 +92,30 @@ func getDateRanges(eods string) *DateRange {
 	}
 }
 
-func getJobText(jobName string, vars params) *string {
+/*
+ * Reads from job.json file, defaults to default_data.json
+ */
+func getJobData(jobName string, vars *params) *string {
+	fileName := jobName + ".json"
+	defaultFileName := "default_data.json"
+	_, err := os.Open(fileName)
+	if errors.Is(err, os.ErrNotExist) {
+		// check if default file exists
+		_, err := os.Open(defaultFileName)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		} else {
+			return readFile(defaultFileName, vars)
+		}
+	}
+	return readFile(fileName, vars)
+}
+
+func readFile(fileName string, vars *params) *string {
 	var temp *template.Template
 	var buf bytes.Buffer
-	temp = template.Must(template.ParseFiles(jobName + ".json"))
-	err := temp.Execute(&buf, vars)
+	temp = template.Must(template.ParseFiles(fileName))
+	err := temp.Execute(&buf, *vars)
 	if err != nil {
 		log.Fatalln(err)
 		return nil
@@ -129,12 +150,12 @@ func ExecuteParallelJobs(jobs []string, eodDate string, host string) {
 		Env:     viper.GetString("env")}
 	for _, j := range jobs {
 		fmt.Println("j = " + j)
-		data := getJobText(j, vars)
+		data := getJobData(j, &vars)
 		k := j
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			TriggerAirflowJob(k, host, data)
+			TriggerAirflowJob(k, host, eodDate, data)
 		}()
 	}
 	wg.Wait()
@@ -144,6 +165,6 @@ func ExecuteJob(job string, eodDate string, host string) {
 	vars := params{
 		EodDate: eodDate,
 		Env:     viper.GetString("env")}
-	data := getJobText(job, vars)
-	TriggerAirflowJob(job, host, data)
+	data := getJobData(job, &vars)
+	TriggerAirflowJob(job, host, eodDate, data)
 }
