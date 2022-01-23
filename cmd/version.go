@@ -6,11 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	rootCmd.AddCommand(versionCmd)
-}
-
-var versionCmd = &cobra.Command{
+var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of airflow-runner",
 	Long:  `All software has versions. This is airflow-runner's`,

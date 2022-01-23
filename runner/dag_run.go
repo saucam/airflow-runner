@@ -32,6 +32,7 @@ func getDagRunState(response *http.Response) *DagRunState {
 			DagId: "",
 			State: "Unknown"}
 	}
+	fmt.Println(dagRunState)
 	return &dagRunState
 }
 
@@ -48,7 +49,7 @@ func TriggerAirflowJob(job string, host string, eod string, data *string) {
 	url := host + "/api/v1/dags/" + job + "/dagRuns"
 	req, err := http.NewRequest("POST", url, strings.NewReader(*data))
 	if err != nil {
-		fmt.Errorf("Got error %s", err.Error())
+		fmt.Println("Got error %s", err.Error())
 		return
 	}
 	req.Header.Set("content-type", "application/json")
@@ -82,10 +83,10 @@ func waitForDagCompletion(host string, eod string, dagRunState *DagRunState) {
 
 	info := dagId + " for eod date " + eod
 	url := host + "/api/v1/dags/" + dagId + "/dagRuns/" + dagRunId
-	user := viper.GetString("user")
-	pwd := viper.GetString("pwd")
+	user := viper.GetString("uname")
+	pwd := viper.GetString("pass")
 
-	for (dagStatus != "success") && (dagStatus != "failed") {
+	for (dagStatus == "queued") || (dagStatus == "running") {
 		fmt.Println("Waiting for dag " + info + " to finish...")
 		time.Sleep(10 * time.Second)
 		req, err := http.NewRequest("GET", url, nil)
@@ -102,12 +103,18 @@ func waitForDagCompletion(host string, eod string, dagRunState *DagRunState) {
 			log.Fatal(err)
 			continue
 		}
+
 		dagRunState := getDagRunState(response)
 		dagStatus = dagRunState.State
 	}
-	if dagStatus == "success" {
+	switch dagStatus {
+	case "success":
 		fmt.Println("Dag " + info + " executed successfully")
-	} else {
+	case "failed":
 		fmt.Println("Dag " + info + " failed!")
+	case "Unknown":
+		fmt.Println("Error connecting to airflow to get status of dag " + info)
+	default:
+		fmt.Println("Unknown error while getting status of dag " + info)
 	}
 }

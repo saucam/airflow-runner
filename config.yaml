@@ -1,4 +1,4 @@
-host: http://localhost:8080
+host: "http://localhost:8080"
 env: dev
-user: airflow
-pwd: airflow
+uname: airflow
+pass: airflow
