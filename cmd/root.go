@@ -2,8 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/saucam/airflow-runner/runner"
 	"github.com/spf13/cobra"
@@ -11,6 +15,15 @@ import (
 	"github.com/spf13/viper"
 )
 
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+const Version string = "v0.1"
+
+var src = rand.NewSource(time.Now().UnixNano())
 var (
 	// Used for flags.
 	cfgFile     string
@@ -19,6 +32,10 @@ var (
 	dateRange   string
 	env         string
 )
+
+func fileNameWithoutExtension(fileName string) string {
+	return strings.TrimSuffix(fileName, filepath.Ext(fileName))
+}
 
 func NewRootCommand() *cobra.Command {
 	currTime := time.Now()
@@ -37,7 +54,7 @@ to run multiple jobs concurrently.`,
 			rk := viper.New()
 			rk.SetConfigFile(flowFile)
 			if err := rk.ReadInConfig(); err == nil {
-				fmt.Println("Using flow file:", rk.ConfigFileUsed())
+				runner.Zlog.Info().Msgf("Using flow file: %s", rk.ConfigFileUsed())
 			}
 			err := rk.Unmarshal(&config)
 
@@ -70,6 +87,24 @@ func Execute() error {
 	return nil
 }
 
+func RandString(n int) string {
+	b := make([]byte, n)
+	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+
+	return *(*string)(unsafe.Pointer(&b))
+}
+
 func initConfig(cmd *cobra.Command) error {
 	if cfgFile != "" {
 		// Use config file from the flag.
@@ -88,10 +123,25 @@ func initConfig(cmd *cobra.Command) error {
 	viper.AutomaticEnv()
 	viper.SetDefault("license", "apache")
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+		fmt.Println("Using config file: " + viper.ConfigFileUsed())
 	}
 	// Bind the current command's flags to viper
 	bindFlags(cmd)
+	// Set up logging
+	logDir := "log"
+	if viper.IsSet("logdir") {
+		logDir = viper.GetString("logdir")
+	}
+	logFileName := fileNameWithoutExtension(flowFile) + "_" + RandString(7) + ".log"
+	// Init logger
+	logConfig := &runner.LogConfig{
+		ConsoleLoggingEnabled: true,
+		FileLoggingEnabled:    true,
+		Directory:             logDir,
+		FileName:              logFileName}
+
+	runner.Zlog = runner.ConfigureLogger(logConfig)
+	runner.Zlog.Info().Msgf("Running airflow-runner version %s", Version)
 	return nil
 }
 

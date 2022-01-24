@@ -3,7 +3,6 @@ package runner
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -127,7 +126,7 @@ func readFile(fileName string, vars *params) *string {
 func ExecuteFlow(host string, config FlowConfig, eods string) {
 	dates := getDateRanges(eods)
 	if len(config.Jobs) < 1 {
-		fmt.Println("No jobs to run!")
+		Zlog.Info().Msg("No jobs to run!")
 	} else {
 		for _, d := range dates.dates {
 			for _, h := range config.Jobs {
@@ -149,7 +148,6 @@ func ExecuteParallelJobs(jobs []string, eodDate string, host string) {
 		EodDate: eodDate,
 		Env:     viper.GetString("env")}
 	for _, j := range jobs {
-		fmt.Println("j = " + j)
 		data := getJobData(j, &vars)
 		k := j
 		wg.Add(1)

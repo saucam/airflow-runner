@@ -2,7 +2,6 @@ package runner
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -25,14 +24,15 @@ type DagRunState struct {
 
 func getDagRunState(response *http.Response) *DagRunState {
 	var dagRunState DagRunState
-	err := json.NewDecoder(response.Body).Decode(&dagRunState)
+	body := response.Body
+	err := json.NewDecoder(body).Decode(&dagRunState)
 	if err != nil {
-		log.Fatal("Error while decoding response " + err.Error())
+		Zlog.Fatal().
+			Msgf("Error while decoding response %s", err.Error())
 		return &DagRunState{
 			DagId: "",
 			State: "Unknown"}
 	}
-	fmt.Println(dagRunState)
 	return &dagRunState
 }
 
@@ -41,19 +41,27 @@ func getDagRunState(response *http.Response) *DagRunState {
  * curl -X POST --user "airflow:airflow" http://localhost:8080//api/v1/dags/example_bash_operator/dagRuns -H 'content-type:application/json' -d'{}'
  */
 func TriggerAirflowJob(job string, host string, eod string, data *string) {
-	fmt.Println("Triggering job " + job + " for eod " + eod + " with data " + *data)
+	Zlog.Info().
+		Str("eod", eod).
+		Str("dagId", job).
+		Msgf("Triggering job with data %s", *data)
 	client := &http.Client{
-		Timeout: time.Second * 10,
+		Transport: LoggingRoundTripper{http.DefaultTransport},
+		Timeout:   time.Second * 10,
 	}
 
 	url := host + "/api/v1/dags/" + job + "/dagRuns"
 	req, err := http.NewRequest("POST", url, strings.NewReader(*data))
 	if err != nil {
-		fmt.Println("Got error %s", err.Error())
+		Zlog.Fatal().
+			Str("eod", eod).
+			Str("dagId", job).
+			Msgf("Got error while triggering dag %s", err.Error())
 		return
 	}
 	req.Header.Set("content-type", "application/json")
 	req.SetBasicAuth("airflow", "airflow")
+
 	response, err := client.Do(req)
 
 	// resp, err := http.Post(host, "application/json",
@@ -75,23 +83,29 @@ func TriggerAirflowJob(job string, host string, eod string, data *string) {
  */
 func waitForDagCompletion(host string, eod string, dagRunState *DagRunState) {
 	client := &http.Client{
-		Timeout: time.Second * 10,
+		Transport: LoggingRoundTripper{http.DefaultTransport},
+		Timeout:   time.Second * 10,
 	}
 	dagId := dagRunState.DagId
 	dagRunId := dagRunState.DagRunId
 	dagStatus := dagRunState.State
 
-	info := dagId + " for eod date " + eod
 	url := host + "/api/v1/dags/" + dagId + "/dagRuns/" + dagRunId
 	user := viper.GetString("uname")
 	pwd := viper.GetString("pass")
 
 	for (dagStatus == "queued") || (dagStatus == "running") {
-		fmt.Println("Waiting for dag " + info + " to finish...")
+		Zlog.Info().
+			Str("eod", eod).
+			Str("dagId", dagId).
+			Msg("Waiting for dag to finish...")
 		time.Sleep(10 * time.Second)
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
-			log.Fatal("Got error while getting dag status", err.Error())
+			Zlog.Fatal().
+				Str("eod", eod).
+				Str("dagId", dagId).
+				Msgf("Got error while getting dag status %s", err.Error())
 			continue
 		}
 		req.Header.Set("content-type", "application/json")
@@ -100,7 +114,10 @@ func waitForDagCompletion(host string, eod string, dagRunState *DagRunState) {
 		}
 		response, err := client.Do(req)
 		if err != nil {
-			log.Fatal(err)
+			Zlog.Fatal().
+				Str("eod", eod).
+				Str("dagId", dagId).
+				Msgf("Error while getting response %s", err)
 			continue
 		}
 
@@ -109,12 +126,24 @@ func waitForDagCompletion(host string, eod string, dagRunState *DagRunState) {
 	}
 	switch dagStatus {
 	case "success":
-		fmt.Println("Dag " + info + " executed successfully")
+		Zlog.Info().
+			Str("eod", eod).
+			Str("dagId", dagId).
+			Msg("Dag executed successfully")
 	case "failed":
-		fmt.Println("Dag " + info + " failed!")
+		Zlog.Warn().
+			Str("eod", eod).
+			Str("dagId", dagId).
+			Msg("Dag run failed!!")
 	case "Unknown":
-		fmt.Println("Error connecting to airflow to get status of dag " + info)
+		Zlog.Warn().
+			Str("eod", eod).
+			Str("dagId", dagId).
+			Msg("Error connecting to airflow to get status of dag")
 	default:
-		fmt.Println("Unknown error while getting status of dag " + info)
+		Zlog.Warn().
+			Str("eod", eod).
+			Str("dagId", dagId).
+			Msg("Unknown error while getting status of dag")
 	}
 }
