@@ -1,12 +1,10 @@
-name: new_release
-
 on: 
   release:
     types: [created]
 
 jobs:
   releases-matrix:
-    name: Create release
+    name: Release Go Binary
     runs-on: ubuntu-latest
     strategy:
       matrix:
