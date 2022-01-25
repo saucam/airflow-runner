@@ -38,3 +38,4 @@ jobs:
         goversion: "https://dl.google.com/go/go${{ steps.go_version.outputs.prop }}.linux-amd64.tar.gz" 
         pre_command: "go get -v -t -d ./... "  
         release_tag: "v${{ steps.package_info.outputs.prop }}"
+        extra_files: README.md  
