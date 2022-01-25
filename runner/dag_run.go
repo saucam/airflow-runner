@@ -51,6 +51,8 @@ func TriggerAirflowJob(job string, host string, eod string, data *string) {
 	}
 
 	url := host + "/api/v1/dags/" + job + "/dagRuns"
+	user := viper.GetString("uname")
+	pwd := viper.GetString("pass")
 	req, err := http.NewRequest("POST", url, strings.NewReader(*data))
 	if err != nil {
 		Zlog.Fatal().
@@ -60,7 +62,9 @@ func TriggerAirflowJob(job string, host string, eod string, data *string) {
 		return
 	}
 	req.Header.Set("content-type", "application/json")
-	req.SetBasicAuth("airflow", "airflow")
+	if user != "" && pwd != "" {
+		req.SetBasicAuth(user, pwd)
+	}
 
 	response, err := client.Do(req)
 
